@@ -66,6 +66,10 @@
             border: 2px solid #ddd;
             border-radius: 8px;
             cursor: pointer;
+            background: #eee url('data:image/gif;base64,R0lGODlhAQABAIAAAO3t7e7u7iwAAAAAAQABAAACAkQBADs=') center center no-repeat;
+        }
+        .pictograma img.loaded {
+            background: #fff;
         }
         .pictograma.seleccionado img {
             border-color: #005a9c;
@@ -118,24 +122,66 @@
             const pictogramasContainer = document.getElementById('pictogramas-container');
             const selectorIconos = document.getElementById('selector-iconos');
 
-            const pictogramaDb = {
-                'hola': 'https://api.arasaac.org/api/pictograms/2996?download=false',
-                'mundo': 'https://api.arasaac.org/api/pictograms/3339?download=false',
-                'sol': 'https://api.arasaac.org/api/pictograms/2320?download=false',
-                'casa': 'https://api.arasaac.org/api/pictograms/2357?download=false',
-                'perro': 'https://api.arasaac.org/api/pictograms/2233?download=false',
-                'gato': 'https://api.arasaac.org/api/pictograms/2232?download=false',
-                'árbol': 'https://api.arasaac.org/api/pictograms/2319?download=false',
-                'coche': 'https://api.arasaac.org/api/pictograms/2419?download=false',
-                'pelota': 'https://api.arasaac.org/api/pictograms/2569?download=false',
-                'libro': 'https://api.arasaac.org/api/pictograms/2930?download=false'
-            };
-
             const defaultPictograma = 'https://api.arasaac.org/api/pictograms/5428?download=false'; // Pictograma para "pregunta"
-
             let pictogramaSeleccionado = null;
+            let openMojiData = [];
 
+            // Cargar datos de OpenMoji al iniciar
+            fetchOpenMojiData();
             textoUsuario.addEventListener('input', generarPictogramas);
+
+            async function fetchOpenMojiData() {
+                try {
+                    // Usamos un proxy para evitar problemas de CORS si el servidor no lo permite directamente
+                    const response = await fetch('https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/data/openmoji.json');
+                    if (!response.ok) throw new Error('No se pudo cargar OpenMoji JSON');
+                    openMojiData = await response.json();
+                    console.log('Datos de OpenMoji cargados.');
+                } catch (error) {
+                    console.error('Error al cargar los datos de OpenMoji:', error);
+                }
+            }
+
+            function searchOpenMoji(word) {
+                const term = word.toLowerCase();
+                // Buscar coincidencia exacta en anotaciones o tags
+                const found = openMojiData.find(emoji =>
+                    emoji.annotation.toLowerCase() === term ||
+                    (emoji.tags && emoji.tags.toLowerCase().split(', ').includes(term))
+                );
+                return found;
+            }
+
+            async function buscarPictograma(palabra) {
+                // 1. Buscar en ARASAAC
+                try {
+                    const response = await fetch(`https://api.arasaac.org/api/pictograms/es/search/${palabra}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.length > 0) {
+                            return `https://api.arasaac.org/api/pictograms/${data[0]._id}?download=false`;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error buscando en ARASAAC:', error);
+                }
+
+                // 2. Si no se encuentra, buscar en OpenMoji
+                const openMojiIcon = searchOpenMoji(palabra);
+                if (openMojiIcon) {
+                    return `https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/72x72/${openMojiIcon.hexcode}.png`;
+                }
+
+                // 3. Si no se encuentra en ninguno, usar el por defecto
+                return defaultPictograma;
+            }
+
+            async function actualizarPictograma(palabra, imgElement) {
+                imgElement.classList.remove('loaded');
+                const url = await buscarPictograma(palabra);
+                imgElement.onload = () => imgElement.classList.add('loaded');
+                imgElement.src = url;
+            }
 
             function generarPictogramas() {
                 const texto = textoUsuario.value.trim().toLowerCase();
@@ -149,8 +195,8 @@
                     pictogramaDiv.dataset.index = index;
 
                     const img = document.createElement('img');
-                    img.src = pictogramaDb[palabra] || defaultPictograma;
                     img.alt = palabra;
+                    actualizarPictograma(palabra, img);
                     img.addEventListener('click', () => seleccionarPictograma(pictogramaDiv));
 
                     const span = document.createElement('span');
@@ -171,10 +217,7 @@
 
                 const pictogramaDiv = document.querySelector(`.pictograma[data-index='${index}']`);
                 const img = pictogramaDiv.querySelector('img');
-                const span = pictogramaDiv.querySelector('span');
-
-                img.src = pictogramaDb[nuevaPalabra.toLowerCase()] || defaultPictograma;
-                img.alt = nuevaPalabra;
+                actualizarPictograma(nuevaPalabra.toLowerCase(), img);
             }
 
             function seleccionarPictograma(pictogramaDiv) {
@@ -185,8 +228,15 @@
                 pictogramaSeleccionado.classList.add('seleccionado');
             }
 
-            // Poblar selector de iconos
-            Object.entries(pictogramaDb).forEach(([palabra, url]) => {
+            // Poblar selector de iconos (ejemplo con algunos iconos fijos)
+            const iconosFijos = {
+                'feliz': 'https://api.arasaac.org/api/pictograms/3001?download=false',
+                'triste': 'https://api.arasaac.org/api/pictograms/3002?download=false',
+                'comer': 'https://api.arasaac.org/api/pictograms/2533?download=false',
+                'beber': 'https://api.arasaac.org/api/pictograms/2534?download=false',
+            };
+
+            Object.entries(iconosFijos).forEach(([palabra, url]) => {
                 const icono = document.createElement('img');
                 icono.src = url;
                 icono.alt = palabra;
