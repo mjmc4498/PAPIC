@@ -126,6 +126,23 @@
             let pictogramaSeleccionado = null;
             let openMojiData = [];
 
+            const verbos = {
+                'correr': 'corriendo',
+                'jugar': 'jugando',
+                'comer': 'comiendo',
+                'beber': 'bebiendo',
+                'dormir': 'durmiendo',
+                'nadar': 'nadando',
+                'leer': 'leyendo',
+                'escribir': 'escribiendo',
+                'pintar': 'pintando',
+                'cantar': 'cantando',
+                'bailar': 'bailando',
+                'saltar': 'saltando',
+                'volar': 'volando',
+                'caminar': 'caminando',
+            };
+
             // Cargar datos de OpenMoji al iniciar
             fetchOpenMojiData();
             textoUsuario.addEventListener('input', generarPictogramas);
@@ -152,9 +169,23 @@
                 return found;
             }
 
-            async function buscarPictograma(palabra) {
-                // 1. Buscar en ARASAAC
-                try {
+            async function buscarPictograma(palabra, fallbackIndividual = true) {
+                // Intenta la búsqueda con la palabra/frase completa
+                let url = await buscarPictogramaInterno(palabra);
+
+                // Si la búsqueda combinada falla y se permite el fallback, busca las palabras individuales
+                if (!url && fallbackIndividual && palabra.includes(' ')) {
+                    const palabras = palabra.split(' ');
+                    // Buscamos el pictograma para la primera palabra (el sustantivo)
+                    url = await buscarPictogramaInterno(palabras[0]);
+                }
+
+                return url || defaultPictograma;
+            }
+
+            async function buscarPictogramaInterno(palabra) {
+                 // 1. Buscar en ARASAAC
+                 try {
                     const response = await fetch(`https://api.arasaac.org/api/pictograms/es/search/${palabra}`);
                     if (response.ok) {
                         const data = await response.json();
@@ -172,8 +203,7 @@
                     return `https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/72x72/${openMojiIcon.hexcode}.png`;
                 }
 
-                // 3. Si no se encuentra en ninguno, usar el por defecto
-                return defaultPictograma;
+                return null; // Devuelve null si no se encuentra nada
             }
 
             async function actualizarPictograma(palabra, imgElement) {
@@ -186,28 +216,52 @@
             function generarPictogramas() {
                 const texto = textoUsuario.value.trim().toLowerCase();
                 const palabras = texto.split(/\s+/).filter(palabra => palabra.length > 0);
-
                 pictogramasContainer.innerHTML = '';
 
-                palabras.forEach((palabra, index) => {
-                    const pictogramaDiv = document.createElement('div');
-                    pictogramaDiv.className = 'pictograma';
-                    pictogramaDiv.dataset.index = index;
+                let i = 0;
+                while (i < palabras.length) {
+                    let palabraActual = palabras[i];
+                    let palabraSiguiente = palabras[i + 1];
 
-                    const img = document.createElement('img');
-                    img.alt = palabra;
-                    actualizarPictograma(palabra, img);
-                    img.addEventListener('click', () => seleccionarPictograma(pictogramaDiv));
+                    let busqueda = palabraActual;
+                    let textoMostrado = palabraActual;
+                    let palabrasConsumidas = 1;
 
-                    const span = document.createElement('span');
-                    span.textContent = palabra;
-                    span.contentEditable = true;
-                    span.addEventListener('blur', (e) => actualizarPalabra(index, e.target.textContent));
+                    // Si la palabra siguiente es un verbo conocido, combinamos
+                    if (palabraSiguiente && verbos[palabraSiguiente]) {
+                        busqueda = `${palabraActual} ${verbos[palabraSiguiente]}`;
+                        textoMostrado = `${palabraActual} ${palabraSiguiente}`;
+                        palabrasConsumidas = 2;
+                    }
 
-                    pictogramaDiv.appendChild(img);
-                    pictogramaDiv.appendChild(span);
-                    pictogramasContainer.appendChild(pictogramaDiv);
+                    crearPictograma(busqueda, textoMostrado, i);
+                    i += palabrasConsumidas;
+                }
+            }
+
+            function crearPictograma(palabraParaBuscar, palabraParaMostrar, index) {
+                 const pictogramaDiv = document.createElement('div');
+                pictogramaDiv.className = 'pictograma';
+                pictogramaDiv.dataset.index = index;
+
+                const img = document.createElement('img');
+                img.alt = palabraParaMostrar;
+                actualizarPictograma(palabraParaBuscar, img);
+                img.addEventListener('click', () => seleccionarPictograma(pictogramaDiv));
+
+                const span = document.createElement('span');
+                span.textContent = palabraParaMostrar;
+                span.contentEditable = true;
+                span.addEventListener('blur', (e) => {
+                    // La actualización de palabras complejas requerirá una lógica más sofisticada
+                    // Por ahora, lo mantenemos simple.
+                    const nuevasPalabras = e.target.textContent.split(' ');
+                    actualizarPalabra(index, nuevasPalabras[0]);
                 });
+
+                pictogramaDiv.appendChild(img);
+                pictogramaDiv.appendChild(span);
+                pictogramasContainer.appendChild(pictogramaDiv);
             }
 
             function actualizarPalabra(index, nuevaPalabra) {
