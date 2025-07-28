@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador de Pictogramas Dinámicos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        header, main, footer {
+            width: 100%;
+            max-width: 800px;
+        }
+        h1 {
+            text-align: center;
+            color: #005a9c;
+        }
+        #selector-iconos {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #texto-usuario {
+            width: 100%;
+            height: 100px;
+            padding: 10px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+        }
+        #pictogramas-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-height: 150px;
+        }
+        .pictograma {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 120px;
+        }
+        .pictograma img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .pictograma.seleccionado img {
+            border-color: #005a9c;
+            box-shadow: 0 0 5px #005a9c;
+        }
+        .icono-selector {
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            margin: 5px;
+            border: 2px solid transparent;
+            border-radius: 4px;
+        }
+        .icono-selector:hover {
+            border-color: #005a9c;
+        }
+        .pictograma span {
+            margin-top: 5px;
+            font-size: 14px;
+            text-align: center;
+        }
+        footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Generador de Pictogramas</h1>
+        <div id="selector-iconos">
+            <!-- Los iconos se cargarán aquí -->
+        </div>
+    </header>
+    <main>
+        <textarea id="texto-usuario" placeholder="Escribe una frase para generar pictogramas..."></textarea>
+        <div id="pictogramas-container">
+            <!-- Los pictogramas generados se mostrarán aquí -->
+        </div>
+    </main>
+    <footer>
+        <p>Creado con HTML, CSS y JavaScript puros.</p>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const textoUsuario = document.getElementById('texto-usuario');
+            const pictogramasContainer = document.getElementById('pictogramas-container');
+            const selectorIconos = document.getElementById('selector-iconos');
+
+            const pictogramaDb = {
+                'hola': 'https://api.arasaac.org/api/pictograms/2996?download=false',
+                'mundo': 'https://api.arasaac.org/api/pictograms/3339?download=false',
+                'sol': 'https://api.arasaac.org/api/pictograms/2320?download=false',
+                'casa': 'https://api.arasaac.org/api/pictograms/2357?download=false',
+                'perro': 'https://api.arasaac.org/api/pictograms/2233?download=false',
+                'gato': 'https://api.arasaac.org/api/pictograms/2232?download=false',
+                'árbol': 'https://api.arasaac.org/api/pictograms/2319?download=false',
+                'coche': 'https://api.arasaac.org/api/pictograms/2419?download=false',
+                'pelota': 'https://api.arasaac.org/api/pictograms/2569?download=false',
+                'libro': 'https://api.arasaac.org/api/pictograms/2930?download=false'
+            };
+
+            const defaultPictograma = 'https://api.arasaac.org/api/pictograms/5428?download=false'; // Pictograma para "pregunta"
+
+            let pictogramaSeleccionado = null;
+
+            textoUsuario.addEventListener('input', generarPictogramas);
+
+            function generarPictogramas() {
+                const texto = textoUsuario.value.trim().toLowerCase();
+                const palabras = texto.split(/\s+/).filter(palabra => palabra.length > 0);
+
+                pictogramasContainer.innerHTML = '';
+
+                palabras.forEach((palabra, index) => {
+                    const pictogramaDiv = document.createElement('div');
+                    pictogramaDiv.className = 'pictograma';
+                    pictogramaDiv.dataset.index = index;
+
+                    const img = document.createElement('img');
+                    img.src = pictogramaDb[palabra] || defaultPictograma;
+                    img.alt = palabra;
+                    img.addEventListener('click', () => seleccionarPictograma(pictogramaDiv));
+
+                    const span = document.createElement('span');
+                    span.textContent = palabra;
+                    span.contentEditable = true;
+                    span.addEventListener('blur', (e) => actualizarPalabra(index, e.target.textContent));
+
+                    pictogramaDiv.appendChild(img);
+                    pictogramaDiv.appendChild(span);
+                    pictogramasContainer.appendChild(pictogramaDiv);
+                });
+            }
+
+            function actualizarPalabra(index, nuevaPalabra) {
+                const palabras = textoUsuario.value.trim().toLowerCase().split(/\s+/);
+                palabras[index] = nuevaPalabra.toLowerCase();
+                textoUsuario.value = palabras.join(' ');
+
+                const pictogramaDiv = document.querySelector(`.pictograma[data-index='${index}']`);
+                const img = pictogramaDiv.querySelector('img');
+                const span = pictogramaDiv.querySelector('span');
+
+                img.src = pictogramaDb[nuevaPalabra.toLowerCase()] || defaultPictograma;
+                img.alt = nuevaPalabra;
+            }
+
+            function seleccionarPictograma(pictogramaDiv) {
+                if (pictogramaSeleccionado) {
+                    pictogramaSeleccionado.classList.remove('seleccionado');
+                }
+                pictogramaSeleccionado = pictogramaDiv;
+                pictogramaSeleccionado.classList.add('seleccionado');
+            }
+
+            // Poblar selector de iconos
+            Object.entries(pictogramaDb).forEach(([palabra, url]) => {
+                const icono = document.createElement('img');
+                icono.src = url;
+                icono.alt = palabra;
+                icono.className = 'icono-selector';
+                icono.addEventListener('click', () => {
+                    if (pictogramaSeleccionado) {
+                        const img = pictogramaSeleccionado.querySelector('img');
+                        img.src = url; // Cambia la imagen del pictograma seleccionado
+
+                        pictogramaSeleccionado.classList.remove('seleccionado');
+                        pictogramaSeleccionado = null;
+                    }
+                });
+                selectorIconos.appendChild(icono);
+            });
+        });
+    </script>
+</body>
+</html>
