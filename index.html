@@ -108,9 +108,14 @@
                 'caminar': 'caminando',
             };
 
-            // Cargar datos de OpenMoji al iniciar
-            fetchOpenMojiData();
+            // Cargar datos externos al iniciar
+            cargarDatosExternos();
             textoUsuario.addEventListener('input', generarPictogramas);
+
+            function cargarDatosExternos() {
+                fetchOpenMojiData();
+                cargarDatosMulberry();
+            }
 
             async function fetchOpenMojiData() {
                 try {
@@ -134,23 +139,40 @@
                 return found;
             }
 
-            async function buscarPictograma(palabra, fallbackIndividual = true) {
-                // Intenta la búsqueda con la palabra/frase completa
-                let url = await buscarPictogramaInterno(palabra);
+            let mulberryData = null;
 
-                // Si la búsqueda combinada falla y se permite el fallback, busca las palabras individuales
-                if (!url && fallbackIndividual && palabra.includes(' ')) {
-                    const palabras = palabra.split(' ');
-                    // Buscamos el pictograma para la primera palabra (el sustantivo)
-                    url = await buscarPictogramaInterno(palabras[0]);
+            const pictogramProviders = [
+                buscarEnArasaac,
+                buscarEnMulberry,
+                buscarEnOpenMoji,
+            ];
+
+            async function buscarPictograma(palabra) {
+                // Primero, intenta la búsqueda combinada (ej. "niño corriendo")
+                let combinedSearchTerm = null;
+                const palabras = palabra.split(' ');
+                if (palabras.length > 1 && verbos[palabras[1]]) {
+                    combinedSearchTerm = `${palabras[0]} ${verbos[palabras[1]]}`;
                 }
 
-                return url || defaultPictograma;
+                if (combinedSearchTerm) {
+                    for (const provider of pictogramProviders) {
+                        const url = await provider(combinedSearchTerm);
+                        if (url) return url;
+                    }
+                }
+
+                // Si la búsqueda combinada falla o no aplica, busca la palabra individual
+                for (const provider of pictogramProviders) {
+                    const url = await provider(palabra);
+                    if (url) return url;
+                }
+
+                return defaultPictograma;
             }
 
-            async function buscarPictogramaInterno(palabra) {
-                 // 1. Buscar en ARASAAC
-                 try {
+            async function buscarEnArasaac(palabra) {
+                try {
                     const response = await fetch(`https://api.arasaac.org/api/pictograms/es/search/${palabra}`);
                     if (response.ok) {
                         const data = await response.json();
@@ -159,16 +181,56 @@
                         }
                     }
                 } catch (error) {
-                    console.error('Error buscando en ARASAAC:', error);
+                    // Silencioso para permitir que otros proveedores lo intenten
+                }
+                return null;
+            }
+
+            async function buscarEnMulberry(palabra) {
+                if (!mulberryData) {
+                    await cargarDatosMulberry();
                 }
 
-                // 2. Si no se encuentra, buscar en OpenMoji
+                const termino = palabra.toLowerCase();
+                const simbolo = mulberryData.find(s => s.SymbolName.toLowerCase() === termino || (s.Tags && s.Tags.toLowerCase().split(',').includes(termino)));
+
+                if (simbolo) {
+                    // El nombre del archivo en el zip no siempre coincide con SymbolName, pero suele ser cercano.
+                    // Esta es una limitación del dataset de Mulberry. Usaremos SymbolName como mejor aproximación.
+                    const nombreArchivo = simbolo.SymbolName.replace(/\s/g, '%20');
+                    return `https://raw.githubusercontent.com/mulberrysymbols/mulberry-symbols/main/symbols/svg/${nombreArchivo}.svg`;
+                }
+                return null;
+            }
+
+            async function cargarDatosMulberry() {
+                if (mulberryData) return;
+                try {
+                    const response = await fetch('https://raw.githubusercontent.com/mulberrysymbols/mulberry-symbols/main/symbol-info.csv');
+                    const csvText = await response.text();
+                    // Simple CSV parser
+                    const lines = csvText.split('\n');
+                    const headers = lines[0].split(',');
+                    mulberryData = lines.slice(1).map(line => {
+                        const values = line.split(',');
+                        return headers.reduce((obj, header, index) => {
+                            obj[header.trim()] = values[index] ? values[index].trim() : '';
+                            return obj;
+                        }, {});
+                    });
+                    console.log('Datos de Mulberry Symbols cargados.');
+                } catch (error) {
+                    console.error('Error al cargar los datos de Mulberry Symbols:', error);
+                    mulberryData = []; // Evitar reintentos si falla
+                }
+            }
+
+            function buscarEnOpenMoji(palabra) {
                 const openMojiIcon = searchOpenMoji(palabra);
                 if (openMojiIcon) {
                     return `https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/72x72/${openMojiIcon.hexcode}.png`;
                 }
-
-                return null; // Devuelve null si no se encuentra nada
+                return null;
             }
 
             async function actualizarPictograma(palabra, imgElement) {
